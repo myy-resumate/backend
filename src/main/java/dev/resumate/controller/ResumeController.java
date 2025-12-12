@@ -32,7 +32,7 @@ public class ResumeController {
      */
     @PostMapping
     public ApiResponseDTO<ResumeResponseDTO.CreateResultDTO> createResume(@AuthUser Member member,
-                                                                              @RequestPart(value = "request") ResumeRequestDTO.CreateDTO request) throws IOException {
+                                                                          @RequestBody ResumeRequestDTO.CreateDTO request) throws IOException {
         return ApiResponseDTO.onSuccess(resumeService.saveResume(member, request));
     }
 
@@ -46,7 +46,7 @@ public class ResumeController {
     @PatchMapping("/{resumeId}")
     public ApiResponseDTO<ResumeResponseDTO.UpdateResultDTO> updateResume(@AuthUser Member member,
                                                                           @PathVariable Long resumeId,
-                                                                          @Valid @RequestPart(value = "request") ResumeRequestDTO.UpdateDTO request) throws IOException {
+                                                                          @Valid @RequestBody ResumeRequestDTO.UpdateDTO request) throws IOException {
         return ApiResponseDTO.onSuccess(resumeService.updateResume(member, resumeId, request));
     }
 

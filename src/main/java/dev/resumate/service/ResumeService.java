@@ -3,6 +3,7 @@ package dev.resumate.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.resumate.apiPayload.exception.BusinessBaseException;
 import dev.resumate.apiPayload.exception.ErrorCode;
+import dev.resumate.common.embedding.ResumeEmbeddingService;
 import dev.resumate.common.redis.RedisUtil;
 import dev.resumate.common.redis.domain.RecentResume;
 import dev.resumate.common.s3.S3Util;
@@ -17,20 +18,14 @@ import dev.resumate.dto.ResumeResponseDTO;
 import dev.resumate.repository.*;
 import dev.resumate.repository.dto.AttachmentDTO;
 import dev.resumate.repository.dto.CoverLetterDTO;
-import dev.resumate.repository.dto.ResumeDTO;
 import dev.resumate.repository.dto.TagDTO;
-import io.pinecone.configs.PineconeConnection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.vectorstore.filter.Filter;
-import org.springframework.ai.vectorstore.pinecone.PineconeVectorStore;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.*;
@@ -54,6 +49,7 @@ public class ResumeService {
     private final RecentResumeRepository recentResumeRepository;
     private final S3Util s3Util;
     private final AttachmentRepository attachmentRepository;
+    private final ResumeEmbeddingService embeddingService;
 
     /**
      * 지원서 저장
@@ -97,7 +93,7 @@ public class ResumeService {
         addRecentResume(toTagDTOList(request.getTags()), newResume, member);
 
         //벡터db에 자소서 질문 저장
-        //saveQuestionVector(member, newResume);
+        embeddingService.saveQuestionVector(member, newResume);
 
         return ResumeResponseDTO.CreateResultDTO.builder()
                 .resumeId(newResume.getId())
@@ -180,23 +176,6 @@ public class ResumeService {
             throw new BusinessBaseException(ErrorCode.CONTENT_TYPE_IS_NULL);
         }
         return s3Util.getPresignedUrl(uploadKey, contentType);
-    }
-
-    //자소서 질문을 벡터db에 저장
-    private void saveQuestionVector(Member member, Resume resume) {
-        if (resume.getCoverLetters().isEmpty()) {
-            return;
-        }
-        Map<String, Object> metaData = new HashMap<>();
-        metaData.put("member_id", member.getId());
-        metaData.put("resume_id", resume.getId());
-        List<Document> documentList = resume.getCoverLetters().stream()
-                .filter(coverLetter -> !coverLetter.getQuestion().isEmpty())  //빈 질문은 거르기
-                .map(coverLetter -> {
-            metaData.put("cover_letter_id", coverLetter.getId());
-            return new Document(coverLetter.getId().toString(), coverLetter.getQuestion(), metaData);  //자소서의 id로 벡터 id 지정
-        }).toList();
-        vectorStore.add(documentList);
     }
 
     /**

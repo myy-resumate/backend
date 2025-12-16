@@ -167,6 +167,7 @@ public class ResumeService {
     private static ResumeResponseDTO.FileDTO buildFileDTO(ResumeRequestDTO.FileDTO file, String presignedUrl) {
         return ResumeResponseDTO.FileDTO.builder()
                 .fileName(file.getFileName())
+                .contentType(file.getContentType())
                 .presignedUrl(presignedUrl)
                 .build();
     }
@@ -217,7 +218,7 @@ public class ResumeService {
         //deleteQuestionVector(resume);
 
         updateCoverLetters(request.getCoverLetterDTOS(), resume);  //자소서 수정
-        presignedUrlList = updateFilesWithPresignedUrl(resume, request.getFileDTOS());  //첨부 파일 수정
+        presignedUrlList = updateFilesWithPresignedUrl(resume, request.getRemainFileIds(), request.getNewFiles());  //첨부 파일 수정
         resume.getResumeSearch().setResumeSearch(request);  //ResumeSearch 수정
         resume.setResume(request);  //지원서 수정
         updateTagging(request.getTags(), member, resume);  //태깅 수정
@@ -300,33 +301,33 @@ public class ResumeService {
     }
 
     //첨부파일 수정하고, presigned url 발급
-    private List<ResumeResponseDTO.FileDTO> updateFilesWithPresignedUrl(Resume resume, List<ResumeRequestDTO.FileDTO> newAttachList) {
+    private List<ResumeResponseDTO.FileDTO> updateFilesWithPresignedUrl(Resume resume, List<Long> remainFileIds, List<ResumeRequestDTO.NewFileDTO> newFiles) {
         List<ResumeResponseDTO.FileDTO> fileDTOS = new ArrayList<>();
         List<Attachment> oldAttachList = attachmentRepository.findAllByResume(resume);
 
-        if (newAttachList == null) { //수정 파일이 null인 경우 기존 파일 삭제
-            oldAttachList.forEach(oldAttachment -> s3Util.deleteObject(oldAttachment.getUploadKey()));
-            resume.getAttachments().removeIf(oldAttachList::contains);
-        } else {
-            Iterator<ResumeRequestDTO.FileDTO> fileIterator = newAttachList.iterator();
+        //수정을 안하는 경우
+        if (remainFileIds == null && newFiles == null) {
+            return fileDTOS; // 아무것도 안 함
+        }
 
-            for (Attachment oldAttach : oldAttachList) {
-                if (fileIterator.hasNext()) {
-                    ResumeRequestDTO.FileDTO newAttach = fileIterator.next();
-                    oldAttach.setFileName(newAttach.getFileName());
-                    fileDTOS.add(buildFileDTO(newAttach, s3Util.getPresignedUrl(oldAttach.getUploadKey(), newAttach.getContentType())));//presigned url 발급
-                } else {  //더 이상 바꿀 file이 없으면 남은 기존 파일은 삭제
-                    s3Util.deleteObject(oldAttach.getUploadKey());
-                    resume.getAttachments().remove(oldAttach);
-                }
+        //remainFileids에 없는 기존 파일 -> 삭제
+        for (Attachment old : oldAttachList) {
+            if (remainFileIds != null && !remainFileIds.contains(old.getId())) {  //id 배열에 포함되지 않은 id의 파일을 삭제
+                s3Util.deleteObject(old.getUploadKey());
+                resume.getAttachments().remove(old);
             }
+        }
 
-            //기존보다 수정 파일이 많은 경우
-            while (fileIterator.hasNext()) {
-                ResumeRequestDTO.FileDTO file = fileIterator.next();
-                String uploadKey = S3_FOLDER + resume.getTitle() + UUID.randomUUID();  //고유한 키 생성
-                fileDTOS.add(buildFileDTO(file, s3Util.getPresignedUrl(uploadKey, file.getContentType())));  //presigned url 발급
-                resume.addAttachment(AttachmentConverter.toAttachment(uploadKey, file.getFileName()));
+        //새 파일 추가
+        if (newFiles != null) {
+            for (ResumeRequestDTO.NewFileDTO newFile : newFiles) {
+                String uploadKey = S3_FOLDER + resume.getTitle() + UUID.randomUUID();
+                fileDTOS.add(ResumeResponseDTO.FileDTO.builder()
+                                .fileName(newFile.getFileName())
+                                .presignedUrl(s3Util.getPresignedUrl(uploadKey, newFile.getContentType()))
+                                .contentType(newFile.getContentType())
+                                .build());
+                resume.addAttachment(AttachmentConverter.toAttachment(uploadKey, newFile.getFileName()));
             }
         }
         return fileDTOS;

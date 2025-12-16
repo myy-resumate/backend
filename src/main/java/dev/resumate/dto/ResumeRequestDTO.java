@@ -42,13 +42,20 @@ public class ResumeRequestDTO {
     public static class UpdateDTO {
 
         private String title;
-        private List<TagDTO> tags = new ArrayList<>();  //null 가능
+        private List<TagDTO> tags = new ArrayList<>();
         private String organization;
         private String orgURl;
         private LocalDate applyStart;
         private LocalDate applyEnd;
-        private List<CoverLetterDTO> coverLetterDTOS = new ArrayList<>();  //null 가능
-        private List<FileDTO> fileDTOS = new ArrayList<>();  //null 가능
+        private List<CoverLetterDTO> coverLetterDTOS = new ArrayList<>();
+        private List<Long> remainFileIds = new ArrayList<>();   //유지할 기존 파일 id
+        private List<NewFileDTO> newFiles = new ArrayList<>();  //추가될 파일
+    }
+
+    @Getter
+    public static class NewFileDTO {  //새 파일
+        private String fileName;
+        private String contentType;
     }
 
     @Getter

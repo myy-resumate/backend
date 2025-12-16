@@ -31,6 +31,7 @@ public class ResumeResponseDTO {
     @AllArgsConstructor
     public static class FileDTO {
         private String fileName;
+        private String contentType;
         private String presignedUrl;
     }
 

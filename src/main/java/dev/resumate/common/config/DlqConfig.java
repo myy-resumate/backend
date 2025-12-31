@@ -1,0 +1,36 @@
+package dev.resumate.common.config;
+
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Queue;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class DlqConfig {
+
+    @Value("${rabbitmq.dlq.exchange}")
+    private String dlxName;
+    @Value("${rabbitmq.dlq.queue}")
+    private String dlqName;
+    @Value("${rabbitmq.dlq.routing-key}")
+    private String dlRoutingKey;
+
+
+    @Bean
+    public Queue dlq() {
+        return new Queue(dlqName);
+    }
+
+    @Bean
+    public DirectExchange dlx() {
+        return new DirectExchange(dlxName);
+    }
+
+    @Bean
+    public Binding dlxBinding() {
+        return BindingBuilder.bind(dlq()).to(dlx()).with(dlRoutingKey);
+    }
+}

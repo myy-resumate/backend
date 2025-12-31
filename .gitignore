@@ -6,3 +6,4 @@ out/
 
 src/main/resources/
 k6/
+.env

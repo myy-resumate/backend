@@ -11,9 +11,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class MessageSender {
 
-    @Value("${rabbitmq.exchange}")
+    @Value("${rabbitmq.embedding.exchange}")
     private String exchange;
-    @Value("${rabbitmq.routing-key}")
+    @Value("${rabbitmq.embedding.routing-key}")
     private String routingKey;
 
     private final RabbitTemplate rabbitTemplate;

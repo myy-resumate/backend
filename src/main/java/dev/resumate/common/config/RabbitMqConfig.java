@@ -12,26 +12,38 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Configuration
 public class RabbitMqConfig {
-    
-    @Value("${rabbitmq.exchange}")
+
+    @Value("${rabbitmq.embedding.exchange}")
     private String exchange;
-    @Value("${rabbitmq.queue}")
+    @Value("${rabbitmq.embedding.queue}")
     private String queue;
-    @Value("${rabbitmq.routing-key}")
+    @Value("${rabbitmq.embedding.routing-key}")
     private String routingKey;
+
+    @Value("${rabbitmq.dlq.exchange}")
+    private String dlxName;
+    @Value("${rabbitmq.dlq.routing-key}")
+    private String dlRoutingKey;
 
     //exchange 빈 생성
     @Bean
     public DirectExchange exchange() {
         return new DirectExchange(exchange);
     }
-    
+
     //큐 빈 생성
     @Bean
     public Queue queue() {
-        return new Queue(queue);
+        Map<String, Object> arguments = new HashMap<>();
+        arguments.put("x-message-ttl", 2000);  // ttl 2초로 설정
+        arguments.put("x-dead-letter-exchange", dlxName);
+        arguments.put("x-dead-letter-routing-key", dlRoutingKey);
+        return new Queue(queue, true, false, false, arguments);  //dlq 정보를 등록
     }
 
     //바인딩 빈 생성 - 큐와 exchange를 바인딩

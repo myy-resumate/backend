@@ -93,8 +93,6 @@ public class ResumeService {
         addRecentResume(toTagDTOList(request.getTags()), newResume, member);
 
         //벡터db에 자소서 질문 저장
-        //embeddingService.saveQuestionVector(member, newResume);
-        //embeddingService.saveQuestionVectorTest(member, newResume);
         embeddingService.sendEmbeddingMessage(member, newResume);
 
         return ResumeResponseDTO.CreateResultDTO.builder()

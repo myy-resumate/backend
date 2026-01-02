@@ -19,18 +19,4 @@ public class DlqConfig {
     private String dlRoutingKey;
 
 
-    @Bean
-    public Queue dlq() {
-        return new Queue(dlqName);
-    }
-
-    @Bean
-    public DirectExchange dlx() {
-        return new DirectExchange(dlxName);
-    }
-
-    @Bean
-    public Binding dlxBinding() {
-        return BindingBuilder.bind(dlq()).to(dlx()).with(dlRoutingKey);
-    }
 }

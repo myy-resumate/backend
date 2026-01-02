@@ -1,10 +1,8 @@
 package dev.resumate.common.config;
 
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
-import org.springframework.amqp.core.DirectExchange;
-import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
@@ -29,6 +27,29 @@ public class RabbitMqConfig {
     private String dlxName;
     @Value("${rabbitmq.dlq.routing-key}")
     private String dlRoutingKey;
+    @Value("${rabbitmq.dlq.queue}")
+    private String dlqName;
+
+    @Bean
+    public AmqpAdmin amqpAdmin(ConnectionFactory connectionFactory) {
+        return new RabbitAdmin(connectionFactory);
+    }
+
+    //dlx를 먼저 생성해야함
+    @Bean
+    public DirectExchange dlx() {
+        return new DirectExchange(dlxName);
+    }
+
+    @Bean
+    public Queue dlq() {
+        return new Queue(dlqName);
+    }
+
+    @Bean
+    public Binding dlxBinding() {
+        return BindingBuilder.bind(dlq()).to(dlx()).with(dlRoutingKey);
+    }
 
     //exchange 빈 생성
     @Bean

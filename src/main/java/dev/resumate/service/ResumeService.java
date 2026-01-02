@@ -1,9 +1,11 @@
 package dev.resumate.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.resumate.apiPayload.exception.BusinessBaseException;
 import dev.resumate.apiPayload.exception.ErrorCode;
 import dev.resumate.common.embedding.ResumeEmbeddingService;
+import dev.resumate.common.rabbitmq.EmbeddingMessageDto;
 import dev.resumate.common.redis.RedisUtil;
 import dev.resumate.common.redis.domain.RecentResume;
 import dev.resumate.common.s3.S3Util;
@@ -13,6 +15,9 @@ import dev.resumate.converter.CoverLetterConverter;
 import dev.resumate.converter.ResumeConverter;
 import dev.resumate.converter.ResumeSearchConverter;
 import dev.resumate.domain.*;
+import dev.resumate.domain.enums.AggregateType;
+import dev.resumate.domain.enums.EventStatus;
+import dev.resumate.domain.rabbitmq.OutboxEvent;
 import dev.resumate.dto.ResumeRequestDTO;
 import dev.resumate.dto.ResumeResponseDTO;
 import dev.resumate.repository.*;
@@ -50,6 +55,9 @@ public class ResumeService {
     private final S3Util s3Util;
     private final AttachmentRepository attachmentRepository;
     private final ResumeEmbeddingService embeddingService;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
+    //private final OutboxAfterCommitPublisher outboxAfterCommitPublisher;
 
     /**
      * 지원서 저장
@@ -92,12 +100,33 @@ public class ResumeService {
         //redis에 최근 본 지원서로 저장
         addRecentResume(toTagDTOList(request.getTags()), newResume, member);
 
-        //벡터db에 자소서 질문 저장
-        embeddingService.sendEmbeddingMessage(member, newResume);
+        //아웃박스 이벤트 저장 - 임베딩, 벡터db 저장
+        outboxEventRepository.save(buildOutboxEvent(member, newResume));
+        //outboxAfterCommitPublisher.afterCommit(event);  //커밋 직후 즉시 발행
 
         return ResumeResponseDTO.CreateResultDTO.builder()
                 .resumeId(newResume.getId())
                 .fileDTOS(presignedUrlList)
+                .build();
+    }
+
+    private OutboxEvent buildOutboxEvent(Member member, Resume resume) throws JsonProcessingException {
+        List<EmbeddingMessageDto.CoverLetterDto> coverLetterDtoList = resume.getCoverLetters().stream()
+                .map(coverLetter -> EmbeddingMessageDto.CoverLetterDto.builder()
+                        .coverLetterId(coverLetter.getId())
+                        .question(coverLetter.getQuestion())
+                        .build())
+                .toList();
+
+        return OutboxEvent.builder()
+                .aggregateId(resume.getId())
+                .aggregateType(AggregateType.RESUME)
+                .status(EventStatus.PENDING)
+                .payload(objectMapper.writeValueAsString(EmbeddingMessageDto.builder()
+                        .memberId(member.getId())
+                        .resumeId(resume.getId())
+                        .coverLetterDtoList(coverLetterDtoList)
+                        .build()))
                 .build();
     }
 

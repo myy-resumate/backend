@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.resumate.domain.rabbitmq.OutboxEvent;
 import dev.resumate.repository.OutboxEventRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -12,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Component
@@ -27,6 +30,7 @@ public class OutboxPublisher {
     private final OutboxEventRepository outboxEventRepository;
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
+    private final Counter outboxDuplicateAttemptCounter;
 
     //커밋 직후 발행
     /*@Transactional
@@ -50,9 +54,19 @@ public class OutboxPublisher {
 
         for (OutboxEvent event : events) {
             try {
+                Thread.sleep(50); //동시성 문제 포착용
+            } catch (InterruptedException ignored) {}
+            int updated = outboxEventRepository.markPublishedIfPending(event.getId());
+
+            // 이미 다른 인스턴스가 처리했음
+            if (updated == 0) {
+                outboxDuplicateAttemptCounter.increment();
+            }
+
+            try {
                 log.info("publishing outbox event: {}", event.getAggregateId());
                 publish(event); // MQ 호출
-                event.markPublished();
+                //event.markPublished();
             } catch (Exception e) {
                 event.markFailed();
             }

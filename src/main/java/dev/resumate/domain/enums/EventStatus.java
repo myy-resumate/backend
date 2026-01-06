@@ -1,5 +1,5 @@
 package dev.resumate.domain.enums;
 
 public enum EventStatus {
-    PENDING, PUBLISHED, FAILED
+    PENDING, PROCESSING, PUBLISHED, FAILED
 }

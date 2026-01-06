@@ -12,7 +12,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 public class ResumateApplication {
 	public static void main(String[] args) {
-        System.out.println("Resume application started");
 		SpringApplication.run(ResumateApplication.class, args);
 	}
 

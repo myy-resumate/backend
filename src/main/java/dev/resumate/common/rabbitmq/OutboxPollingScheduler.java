@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 public class OutboxPollingScheduler {
     private final OutboxPublisher outboxPublisher;
 
-    @Scheduled(fixedDelay = 1000 * 30) // 1초
+    @Scheduled(fixedDelay = 1000) // 1초
     public void poll() {
         log.info("polling outbox events");
         outboxPublisher.publishPendingEvents();

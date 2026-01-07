@@ -102,7 +102,6 @@ public class ResumeService {
 
         //아웃박스 이벤트 저장 - 임베딩, 벡터db 저장
         outboxEventRepository.save(buildOutboxEvent(member, newResume));
-        //outboxAfterCommitPublisher.afterCommit(event);  //커밋 직후 즉시 발행
 
         return ResumeResponseDTO.CreateResultDTO.builder()
                 .resumeId(newResume.getId())

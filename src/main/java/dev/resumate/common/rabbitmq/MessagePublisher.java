@@ -9,7 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -28,20 +27,11 @@ public class MessagePublisher {
     private final ObjectMapper objectMapper;
     private final OutboxEventRepository outboxEventRepository;
 
-    //메시지 발행 후 상태 변경
-    /*@Transactional
-    public void publishEvent(OutboxEvent event) {
-        try {
-            log.info("publishing outbox event: {}", event.getAggregateId());
-            publish(event); // MQ 호출
-            outboxEventRepository.markPublished(event.getId(), LocalDateTime.now());
-        } catch (Exception e) {
-            outboxEventRepository.markFailed(event.getId());
-        }
-    }*/
-
     //메시지 발행
     public void publish(OutboxEvent event) throws JsonProcessingException {
+        try {
+            Thread.sleep(10); // 10ms 인위적 네트워크 지연 추가(테스트용)
+        } catch (InterruptedException ignored) {}
         rabbitTemplate.convertAndSend(
                 exchange,
                 routingKey,

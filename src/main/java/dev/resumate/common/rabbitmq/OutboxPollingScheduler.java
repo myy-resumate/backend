@@ -26,7 +26,6 @@ public class OutboxPollingScheduler {
     public void publishPendingEventsWithSkipLocked() {
         List<OutboxEvent> events = outboxPollingService.lockAndMarkProcessing();  //트랜잭션A -> 커밋하면 processing으로 상태 변환
         for (OutboxEvent event : events) {
-            //messagePublisher.publishEvent(event);
             // MQ + 상태 변경
             //여기서 서버가 중단되면 메시지 발행 안되고, processing으로 남아있음 -> 재처리 스케줄러가 다시 메시지 발행
             try {

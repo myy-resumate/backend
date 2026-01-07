@@ -37,12 +37,12 @@ public class OutboxEvent extends BaseTimeEntity {
 
     private LocalDateTime publishedAt;
 
-    public void markPublished() {
-        //this.status = EventStatus.PUBLISHED;
+    /*public void markPublished() {
+        this.status = EventStatus.PUBLISHED;
         this.publishedAt = LocalDateTime.now();
     }
 
     public void markFailed() {
         this.status = EventStatus.FAILED;
-    }
+    }*/
 }

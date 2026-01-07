@@ -35,6 +35,7 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management
     container_name: rabbitmq
+    hostname: rabbitmq
     platform: linux/amd64
     ports:
       - "5672:5672"     # AMQP

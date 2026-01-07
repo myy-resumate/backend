@@ -2,11 +2,8 @@ package dev.resumate.repository;
 
 import dev.resumate.domain.rabbitmq.OutboxEvent;
 import io.lettuce.core.dynamic.annotation.Param;
-import jakarta.persistence.LockModeType;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -17,25 +14,24 @@ import java.util.List;
 @Repository
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> {
 
-    //@Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT o FROM OutboxEvent o
         WHERE o.status = 'PENDING'
         ORDER BY o.createdAt
-    """)  //정렬할 필요 없는듯?
+    """)
     List<OutboxEvent> findPendingEvents(Pageable pageable);
 
-    //카운트 측정용
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    //PROCESSING으로 상태 변경
+    @Modifying(clearAutomatically = true, flushAutomatically = true)  //bulk update이므로 두 옵션을 켜야함
     @Query("""
     UPDATE OutboxEvent o
-    SET o.status = 'PUBLISHED', o.publishedAt = :publishedAt
+    SET o.status = 'PROCESSING'
     WHERE o.id = :id AND o.status = 'PENDING'
     """)
-    int markPublishedIfPending(@Param("id") Long id);
+    int markProcessingIfPending(@Param("id") Long id);
 
-
-    /*@Query(
+    //이벤트 조회 - skip lock
+    @Query(
             value = """
     SELECT *
     FROM outbox_event
@@ -46,6 +42,23 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
   """,
             nativeQuery = true
     )
-    List<OutboxEvent> findPendingForUpdateSkipLocked(@Param("limit") int limit, Pageable pageable);
-*/
+    List<OutboxEvent> findPendingForUpdateSkipLocked(@Param("limit") int limit);
+
+    //발행 성공
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+    UPDATE OutboxEvent o
+    SET o.status = 'PUBLISHED', o.publishedAt = :publishedAt
+    WHERE o.id = :id
+    """)
+    void markPublished(@Param("id") Long id, @Param("publishedAt") LocalDateTime publishedAt);
+
+    //발행 실패
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+    UPDATE OutboxEvent o
+    SET o.status = 'FAILED'
+    WHERE o.id = :id
+    """)
+    void markFailed(@Param("id") Long id);
 }

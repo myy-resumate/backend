@@ -2,69 +2,142 @@ name: AI Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]  # PR 생성, 새 커밋 푸시, PR 재오픈 했을 때
-    # 특정 경로의 파일이 변경됐을 때만 워크플로우 실행
+    types: [opened, synchronize, reopened]
     paths:
       - 'src/main/java/dev/resumate/service/**'
       - 'src/main/java/dev/resumate/repository/**'
       - 'src/main/java/dev/resumate/controller/**'
       - 'src/test/java/dev/resumate/service/**'
-      - '!docs/**'  # ! -> 이 경로의 파일은 리뷰x
+      - '!docs/**'
       - '!**/*.md'
       - '!**/generated/**'
 
 jobs:
-  # job1: codex 코드 리뷰 생성
   codex_review:
-    if: github.event.pull_request.draft == false  # draft pr은 리뷰x -> 토큰 절약
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    permissions:  # 코드 읽고, pr 작성하는 깃허브 토큰 권한 부여
+    permissions:
       contents: read
       pull-requests: write
 
-    # 코드 리뷰 결과물을 job2로 전달
     outputs:
-      final_message: ${{ steps.run_codex.outputs.final-message }}
+      final_message: ${{ steps.read_final_message.outputs.final_message }}
 
-    # 수행 목록
     steps:
-      - name: Checkout PR merge ref  # 코드 내려받기
+      - name: Checkout PR merge ref
         uses: actions/checkout@v5
         with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge  # PR 코드가 main 코드에 merge 됐을 때의 코드를 보고 리뷰함 -> 맥락을 더 잘 반영
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 0
 
-      - name: Pre-fetch base and head refs  # PR의 base브랜치(main)와 head 쪽 참조를 더 명확히 가져옴
-        run: |
-          git fetch --no-tags origin \
-            ${{ github.event.pull_request.base.ref }} \
-            +refs/pull/${{ github.event.pull_request.number }}/head
-
-      - name: Run Codex review  # 코덱스 실행
-        id: run_codex
-        uses: openai/codex-action@v1  # 공식 깃허브 액션 codex
+      - name: Collect changed files in PR
+        id: changed_files
+        uses: actions/github-script@v7
         with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}  # 시크릿에 키 등록 필요
-          prompt-file: .github/codex/prompts/review.md
-          output-file: codex-output.md  # 리뷰 결과를 이 파일에 남김 -> 일단은 기록용
-          model: gpt-5.4-mini
-          safety-strategy: drop-sudo  # codex가 실행하는 명령의 권한 상승 제한
-          sandbox: workspace-write  # 작업 디렉토리 내에서 codex가 읽고 쓸 수 있음
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
 
-  # job2: PR 댓글 작성
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100
+              }
+            );
+
+            const targets = files
+              .map(f => f.filename)
+              .filter(name =>
+                name.startsWith('src/main/java/dev/resumate/service/') ||
+                name.startsWith('src/main/java/dev/resumate/repository/') ||
+                name.startsWith('src/main/java/dev/resumate/controller/') ||
+                name.startsWith('src/test/java/dev/resumate/service/')
+              )
+              .filter(name =>
+                !name.startsWith('docs/') &&
+                !name.endsWith('.md') &&
+                !name.includes('/generated/')
+              );
+
+            fs.writeFileSync('changed-files.json', JSON.stringify(targets, null, 2));
+            core.setOutput('count', String(targets.length));
+
+      - name: Stop if no target files
+        if: steps.changed_files.outputs.count == '0'
+        run: echo "No matching changed files."
+
+      - name: Build isolated review workspace
+        if: steps.changed_files.outputs.count != '0'
+        run: |
+          mkdir -p review-scope/.github/codex/prompts
+
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const files = JSON.parse(fs.readFileSync('changed-files.json', 'utf8'));
+
+          for (const file of files) {
+            const dest = path.join('review-scope', file);
+            fs.mkdirSync(path.dirname(dest), { recursive: true });
+            fs.copyFileSync(file, dest);
+          }
+          NODE
+
+          cp .github/codex/prompts/review.md review-scope/.github/codex/prompts/review.md
+
+          if [ -f AGENTS.md ]; then
+            cp AGENTS.md review-scope/AGENTS.md
+          fi
+
+      - name: Install Codex CLI
+        if: steps.changed_files.outputs.count != '0'
+        run: npm install -g @openai/codex
+
+      - name: Run Codex review in isolated workspace
+        if: steps.changed_files.outputs.count != '0'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          codex exec \
+            --cd review-scope \
+            --model gpt-5.4-mini \
+            --sandbox workspace-write \
+            --output-last-message final-message.txt \
+            "$(cat review-scope/.github/codex/prompts/review.md)"
+
+      - name: Read final message
+        id: read_final_message
+        run: |
+          if [ -f review-scope/final-message.txt ]; then
+            {
+              echo 'final_message<<EOF'
+              cat review-scope/final-message.txt
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo 'final_message<<EOF'
+              echo ''
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
   post_review_comment:
     runs-on: ubuntu-latest
-    needs: codex_review  # 이 job이 먼저 끝나야 실행 가능. job1 -> job2 순서 지정
-    if: needs.codex_review.outputs.final_message != ''  # 리뷰 결과가 있을 때만 실행
+    needs: codex_review
+    if: needs.codex_review.outputs.final_message != ''
     permissions:
       pull-requests: write
 
     steps:
       - name: Post review comment
-        uses: actions/github-script@v7  # 깃허브 API를 js로 호출하는 액션 - 별도의 스크립트 필요없이 바로 js로 api 호출 가능
+        uses: actions/github-script@v7
         with:
-          github-token: ${{ github.token }}  # 깃허브 api 호출에 토큰 필요
-          # pr 댓글 작성 스크립트 - js로 작성됨
-          # pr도 깃허브 내부적으로는 이슈 성격을 가짐 -> issues.createComment인 이유
+          github-token: ${{ github.token }}
           script: |
             const body = process.env.CODEX_FINAL_MESSAGE;
 
@@ -75,4 +148,4 @@ jobs:
               body
             });
         env:
-          CODEX_FINAL_MESSAGE: ${{ needs.codex_review.outputs.final_message }}  # job1에서 만든 output
+          CODEX_FINAL_MESSAGE: ${{ needs.codex_review.outputs.final_message }}

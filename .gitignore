@@ -5,3 +5,5 @@ build/
 out/
 
 src/main/resources/
+.env
+k6/

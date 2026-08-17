@@ -6,18 +6,25 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 
-@EnableAsync
 @Configuration
 public class AsyncConfig {
 
-    @Bean(name = "imageUploadExecutor")
+    @Bean(name = "embeddingExecutor")
     public Executor imageUploadExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setThreadGroupName("imageUploadExecutor");
+        executor.setThreadGroupName("embeddingExecutor");
+
+        //매우 작게 설정
         executor.setCorePoolSize(10);
-        executor.setMaxPoolSize(20);
+        executor.setMaxPoolSize(10);
         executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("embed-");
+        //거절 시 바로 예외 발생
+        executor.setRejectedExecutionHandler(
+                new ThreadPoolExecutor.AbortPolicy()
+        );
         executor.initialize();
         return executor;
     }

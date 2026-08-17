@@ -1,6 +1,12 @@
 version: "3.8"
 
 services:
+  app:
+    build: .
+    #container_name: spring-app
+    ports:
+      - "8080-8081:8080"  #포트를 8081~8082 범위의 값으로 설정
+
   mysql:
     image: mysql:8.0
     container_name: mysql
@@ -26,6 +32,23 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     restart: unless-stopped
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    hostname: rabbitmq
+    platform: linux/amd64
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      TZ: Asia/Seoul
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+
 volumes:
   mysql_data:
   redis_data:
+  rabbitmq_data:
